@@ -1,0 +1,40 @@
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./server
+    restart: unless-stopped
+    environment:
+      CARDIFICATOR_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      CARDIFICATOR_JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      CARDIFICATOR_JWT_ALGORITHM: HS256
+      CARDIFICATOR_JWT_EXPIRE_MINUTES: ${JWT_EXPIRE_MINUTES:-60}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./client
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "127.0.0.1:${APP_PORT:-8080}:80"
+
+volumes:
+  db_data:
